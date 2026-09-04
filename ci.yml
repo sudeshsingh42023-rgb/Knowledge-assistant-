@@ -1,0 +1,39 @@
+name: CI - Build, Test, Eval-Gate, Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Generate corpus
+        run: python generate_corpus.py
+      - name: Run retrieval quality gate
+        run: |
+          python evaluate.py
+          python - <<'EOF'
+          import json
+          r = json.load(open("eval_report.json"))
+          assert r["mrr"] >= 0.85, f"MRR regression: {r['mrr']}"
+          print("Quality gate passed:", r)
+          EOF
+      - name: Build Docker image
+        run: docker build -t knowledge-assistant:${{ github.sha }} .
+
+  deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy (placeholder for container registry push + rollout)
+        run: echo "Push image to registry and trigger rolling deploy"
